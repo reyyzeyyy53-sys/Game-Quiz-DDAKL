@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Akuntansi - Google Login & Cloud Save</title>
+    <!-- Firebase SDK (Compat Version untuk kemudahan di file HTML tunggal) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #0f172a;
+            --secondary-color: #1e293b;
+            --accent-color: #fbbf24;
+            --text-color: #f1f5f9;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --glass-bg: rgba(30, 41, 59, 0.9);
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-family);
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .game-container {
+            position: relative;
+            z-index: 10;
+            width: 90%;
+            max-width: 850px;
+            min-height: 80vh;
+            margin: 20px 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 2px solid var(--accent-color);
+            box-shadow: 0 0 40px rgba(251, 191, 36, 0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: fadeIn 1s ease-out;
+        }
+
+        header {
+            text-align: center;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--accent-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 { font-size: 1.2rem; color: var(--accent-color); }
+
+        .user-profile {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            color: var(--primary-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            overflow: hidden;
+        }
+        
+        .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+        .logout-btn {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            padding: 25px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .hidden { display: none !important; }
+
+        /* Login Screen */
+        .login-box {
+            max-width: 400px;
+            width: 100%;
+            margin: auto;
+            text-align: center;
+            background: rgba(0,0,0,0.2);
+            padding: 40px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .google-btn {
+            background-color: #fff;
+            color: #444;
+            border-radius: 5px;
+            border: thin solid #888;
+            box-shadow: 1px 1px 1px grey;
+            white-space: nowrap;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .google-btn:hover { background-color: #f1f1f1; }
+        .google-icon { width: 18px; height: 18px; }
+
+        .loading-spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-left-color: var(--accent-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        /* Start Screen */
+        .start-content { text-align: center; margin-top: 20px; }
+        .icon-accounting { font-size: 5rem; margin-bottom: 20px; animation: float 3s ease-in-out infinite; }
+        
+        .welcome-user { font-size: 1.2rem; margin-bottom: 20px; color: var(--accent-color); }
+        .save-status { font-size: 0.8rem; color: #10b981; margin-bottom: 20px; }
+
+        .btn {
+            background: var(--accent-color);
+            color: var(--primary-color);
+            border: none;
+            padding: 12px 35px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px;
+            box-shadow: 0 4px 10px rgba(251, 191, 36, 0.4);
+        }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 6px 15px rgba(251, 191, 36, 0.6); }
+        .btn:disabled { background: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .credits-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            border: 1px solid #334155;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .credits-box h3 { color: var(--accent-color); margin-bottom: 10px; }
+        .credits-box p { margin: 5px 0; font-size: 0.9rem; color: #cbd5e1; }
+
+        /* Game Screen Elements */
+        .hud { width: 100%; display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 1.1rem; font-weight: bold; }
+        .progress-bar-container { width: 100%; height: 8px; background: #334155; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.3s ease; }
+        .question-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 25px;
+            border-radius: 15px;
+            width: 100%;
+            margin-bottom: 25px;
+            border-left: 5px solid var(--accent-color);
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.15rem;
+            line-height: 1.6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; margin-bottom: 20px; }
+        .option-btn {
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+            text-align: left;
+        }
+        .option-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); }
+        .option-btn.selected { border-color: var(--accent-color); background: rgba(251, 191, 36, 0.1); }
+        .option-btn.correct { background: var(--success-color) !important; border-color: var(--success-color) !important; }
+        .option-btn.wrong { background: var(--error-color) !important; border-color: var(--error-color) !important; opacity: 0.6; }
+
+        .controls { display: flex; justify-content: center; width: 100%; margin-bottom: 20px; }
+
+        .explanation-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            width: 100%;
+            margin-top: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none;
+            animation: slideUp 0.3s ease-out;
+        }
+        .explanation-box.show { display: block; }
+        .explanation-title { font-weight: bold; margin-bottom: 10px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+        .explanation-text { font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; }
+
+        /* Result Screen */
+        .result-content { text-align: center; margin-top: auto; margin-bottom: auto; }
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 8px solid var(--accent-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+        }
+        
+        .cloud-save-badge {
+            margin-top: 10px;
+            background: #0ea5e9;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+            box-shadow: 0 0 10px rgba(14, 165, 233, 0.5);
+        }
+
+        /* Animations */
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media (max-width: 600px) {
+            .options-grid { grid-template-columns: 1fr; }
+            h1 { font-size: 1rem; }
+            .google-btn { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="game-container">
+        <header>
+            <h1>DASAR-DASAR AKUNTANSI</h1>
+            <div id="user-display" class="user-profile">
+                <div class="user-avatar" id="user-avatar">
+                    <!-- Avatar Image will be here -->
+                    <span id="user-initial">U</span>
+                </div>
+                <span id="username-span">User</span>
+                <button class="logout-btn" onclick="auth.logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- LAYAR LOGIN -->
+        <main id="login-screen" class="screen">
+            <div class="login-box">
+                <div class="icon-accounting" style="font-size: 3rem;">🔐</div>
+                <h2 style="margin-bottom: 20px; color: var(--accent-color);">LOGIN GOOGLE</h2>
+                <p style="font-size: 0.9rem; margin-bottom: 20px; opacity: 0.8;">Masuk untuk menyimpan progress permainan secara otomatis di cloud.</p>
+                
+                <div id="login-loading" class="loading-spinner"></div>
+                <div id="login-buttons">
+                    <button class="google-btn" onclick="auth.googleSignIn()">
+                        <img class="google-icon" src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="G">
+                        Masuk dengan Google
+                    </button>
+                    <p id="login-error" style="color: #ef4444; margin-top: 15px; font-size: 0.85rem; display: none;">Gagal login. Pastikan Anda sudah mengatur API Key di kode.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- LAYAR MULAI -->
+        <main id="start-screen" class="screen hidden">
+            <div class="start-content">
+                <div class="icon-accounting">💰📊📈</div>
+                <div id="welcome-msg" class="welcome-user">Selamat Datang!</div>
+                <div id="cloud-save-status" class="save-status">☁️ Progress Tersimpan di Cloud</div>
+                
+                <button class="btn" onclick="game.start()">LANJUTKAN PERMAINAN</button>
+
+                <div class="credits-box">
+                    <h3>Game Creator</h3>
+                    <p><strong>Reski Ardiansyah</strong></p>
+                    <p>📧 Email: ar0236879@gmail.com</p>
+                    <p>📷 Instagram: ikky05__</p>
+                    <p>📱 WhatsApp: 085657398446</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- LAYAR GAME -->
+        <main id="game-screen" class="screen hidden">
+            <div class="hud">
+                <span id="question-counter">Soal: 1/100</span>
+                <span id="score-display">Skor: 0</span>
+            </div>
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            
+            <div id="question-text" class="question-card">Memuat pertanyaan...</div>
+
+            <div id="options-container" class="options-grid"></div>
+
+            <div class="controls">
+                <button id="btn-check" class="btn" onclick="game.checkAnswer()" disabled>PERIKSA JAWABAN</button>
+                <button id="btn-next" class="btn hidden" onclick="game.nextQuestion()">SOAL SELANJUTNYA ➔</button>
+            </div>
+
+            <div id="explanation-box" class="explanation-box">
+                <div id="explanation-title" class="explanation-title"></div>
+                <div id="explanation-text" class="explanation-text"></div>
+            </div>
+        </main>
+
+        <!-- LAYAR HASIL -->
+        <main id="result-screen" class="screen hidden">
+            <div class="result-content">
+                <h2>Permainan Selesai!</h2>
+                <p style="margin-bottom: 20px; opacity: 0.8;">Semua soal telah dijawab.</p>
+                
+                <div class="score-circle">
+                    <span id="final-score">0</span>
+                </div>
+
+                <div id="cloud-result-badge" class="cloud-save-badge" style="display:none;">
+                    ☁️ Data Tersimpan ke Akun Google
+                </div>
+
+                <div id="feedback-message" style="font-size: 1.2rem; color: var(--accent-color); font-weight: bold; margin-bottom: 20px;"></div>
+                <p id="result-detail" style="margin-bottom: 30px;"></p>
+                
+                <button class="btn" onclick="game.restart()">MAIN ULANG</button>
+                
+                <div class="credits-box" style="background: transparent; border: none; margin-top: 40px;">
+                    <p style="color: #94a3b8;">Created by Reski Ardiansyah</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. FIREBASE CONFIGURATION (WAJIB DIISI)
+        // ==========================================
+        // Ganti nilai di bawah ini dengan config dari Firebase Console Anda
+        // Jika tidak diisi, game hanya akan menggunakan mode offline (tanpa login asli).
+        
+        const firebaseConfig = {
+            apiKey: "PASTE_API_KEY_DISINI", 
+            authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "PASTE_PROJECT_ID",
+            storageBucket: "PASTE_PROJECT_ID.appspot.com",
+            messagingSenderId: "PASTE_SENDER_ID",
+            appId: "PASTE_APP_ID"
+        };
+
+        // ==========================================
+        // 2. FIREBASE AUTH & DB LOGIC
+        // ==========================================
+        let db;
+        let isFirebaseActive = false;
+
+        // Cek apakah config sudah diisi user
+        try {
+            if (firebaseConfig.apiKey !== "PASTE_API_KEY_DISINI") {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                isFirebaseActive = true;
+                console.log("Firebase initialized successfully.");
+            } else {
+                console.warn("Firebase Config masih placeholder. Mode Offline aktif.");
+            }
+        } catch (e) {
+            console.error("Error initializing Firebase:", e);
+        }
+
+        const auth = {
+            user: null,
+
+            init: function() {
+                if (!isFirebaseActive) {
+                    // Jika firebase belum di-setup, langsung ke start screen sebagai 'Guest'
+                    this.user = { uid: 'guest', displayName: 'Guest User' };
+                    this.updateUI();
+                    game.showScreen('start-screen');
+                    return;
+                }
+
+                // Monitor auth state
+                firebase.auth().onAuthStateChanged((user) => {
+                    if (user) {
+                        // User is signed in
+                        this.user = user;
+                        this.updateUI();
+                        game.showScreen('start-screen');
+                        // Load progress dari cloud
+                        game.loadProgressFromCloud();
+                    } else {
+                        // User is signed out
+                        this.user = null;
+                        this.updateUI();
+                        game.showScreen('login-screen');
+                    }
+                });
+            },
+
+            googleSignIn: function() {
+                if (!isFirebaseActive) {
+                    alert("Harap isi Firebase Config di kode script agar Login Google berfungsi.");
+                    return;
+                }
+
+                document.getElementById('login-buttons').style.display = 'none';
+                document.getElementById('login-loading').style.display = 'block';
+
+                const provider = new firebase.auth.GoogleAuthProvider();
+                firebase.auth().signInWithPopup(provider)
+                    .then((result) => {
+                        // Login sukses, onAuthStateChanged akan handle redirect
+                        document.getElementById('login-loading').style.display = 'none';
+                        document.getElementById('login-buttons').style.display = 'block';
+                    })
+                    .catch((error) => {
+                        console.error(error);
+                        document.getElementById('login-error').style.display = 'block';
+                        document.getElementById('login-loading').style.display = 'none';
+                        document.getElementById('login-buttons').style.display = 'block';
+                        alert("Login Gagal: " + error.message);
+                    });
+            },
+
+            logout: function() {
+                if (isFirebaseActive) {
+                    firebase.auth().signOut();
+                } else {
+                    location.reload(); // Reload untuk reset offline mode
+                }
+            },
+
+            updateUI: function() {
+                if (this.user) {
+                    const name = this.user.displayName || 'Pemain';
+                    const photoURL = this.user.photoURL;
+                    
+                    document.getElementById('username-span').innerText = name;
+                    document.getElementById('welcome-msg').innerText = `Halo, ${name}!`;
+                    
+                    // Update Avatar
+                    const avatarContainer = document.getElementById('user-avatar');
+                    if (photoURL) {
+                        avatarContainer.innerHTML = `<img src="${photoURL}" alt="User">`;
+                    } else {
+                        avatarContainer.innerHTML = `<span>${name.charAt(0).toUpperCase()}</span>`;
+                    }
+
+                    document.getElementById('user-display').style.display = 'flex';
+                    document.getElementById('cloud-save-status').style.display = 'block';
+                } else {
+                    document.getElementById('user-display').style.display = 'none';
+                    document.getElementById('cloud-save-status').style.display = 'none';
+                }
+            }
+        };
+
+        // ==========================================
+        // 3. DATABASE SOAL (SAMPLE 60 SOAL - BISA DITAMBAH)
+        // ==========================================
+        const questionBank = [
+            { q: "Apa definisi bisnis menurut konteks umum?", options: ["Kegiatan mencari modal", "Kegiatan menciptakan nilai tambah dengan memproduksi barang/jasa", "Kegiatan mengeluarkan pajak", "Kegiatan menyewa tempat"], a: 1, explanation: "Bisnis didefinisikan sebagai kegiatan yang dilakukan individu atau kelompok untuk menciptakan nilai tambah." },
+            { q: "Manakah yang merupakan contoh bisnis jasa?", options: ["Pabrik sepatu", "Toko Kelontong", "Salon Kecantikan", "Pertambangan Batubara"], a: 2, explanation: "Salon adalah bisnis jasa karena produknya berupa pelayanan yang tidak berwujud." },
+            { q: "Perusahaan yang membeli barang untuk dijual kembali tanpa mengubah bentuk disebut...", options: ["Perusahaan Jasa", "Perusahaan Dagang", "Perusahaan Manufaktur", "Perusahaan Agraris"], a: 1, explanation: "Perusahaan dagang berperan sebagai perantara tanpa proses produksi." },
+            { q: "Perusahaan yang mengolah bahan baku menjadi barang jadi disebut...", options: ["Perusahaan Jasa", "Perusahaan Dagang", "Perusahaan Manufaktur", "Perusahaan Ekstraktif"], a: 2, explanation: "Manufaktur mengolah bahan baku menjadi produk jadi." },
+            { q: "Contoh bisnis agraris adalah...", options: ["Tambang Emas", "Perikanan Budidaya", "Jasa Ekspedisi", "Pabrik Tekstil"], a: 1, explanation: "Agraris berkaitan dengan pertanian, peternakan, perikanan." },
+            { q: "Bentuk perusahaan yang dimiliki dan dikelola oleh satu orang disebut...", options: ["Persekutuan Firma", "Perseroan Terbatas", "Perusahaan Perseorangan", "Koperasi"], a: 2, explanation: "Perusahaan Perseorangan (UD) dimiliki satu orang dengan tanggung jawab tak terbatas." },
+            { q: "Koperasi berlandaskan pada asas...", options: ["Kapitalisme", "Kekeluargaan dan Gotong Royong", "Individualisme", "Monopoli"], a: 1, explanation: "Asas koperasi adalah kekeluargaan dan gotong royong." },
+            { q: "Apa fungsi utama akuntansi dalam bisnis?", options: ["Menambah utang", "Menghitung jumlah karyawan", "Menyediakan laporan keuangan untuk pengambilan keputusan", "Menggaji manajer"], a: 2, explanation: "Akuntansi menyediakan informasi keuangan untuk pengambilan keputusan." },
+            { q: "Nama standar akuntansi di Indonesia pada tahun 1973 adalah...", options: ["PSAK", "PAI (Prinsip Akuntansi Indonesia)", "SAK ETAP", "IFRS"], a: 1, explanation: "Awalnya bernama PAI sebelum berubah menjadi SAK." },
+            { q: "SAK yang diperuntukkan bagi Entitas Tanpa Akuntabilitas Publik adalah...", options: ["PSAK IFRS", "PSAK Syariah", "SAK ETAP", "SAP"], a: 2, explanation: "SAK ETAP untuk UMKM dan entitas tanpa akuntabilitas publik." },
+            { q: "SAP merupakan singkatan dari...", options: ["Standar Akuntansi Pemerintahan", "Sistem Akuntansi Perusahaan", "Surat Akuntansi Pajak", "Syarat Akuntansi Publik"], a: 0, explanation: "SAP adalah Standar Akuntansi Pemerintahan." },
+            { q: "Akuntansi Wakaf diatur dalam PSAK nomor...", options: ["109", "110", "111", "112"], a: 3, explanation: "PSAK 112 mengatur akuntansi wakaf." },
+            { q: "Aplikasi komputer akuntansi yang berbasis desktop antara lain...", options: ["Jurnal ID, Xero", "Accurate, MYOB", "Instagram, TikTok", "Word, Excel"], a: 1, explanation: "Accurate dan MYOB adalah software desktop." },
+            { q: "Manfaat komputerisasi akuntansi adalah...", options: ["Informasi lebih lambat", "Mencegah kekeliruan manusiawi", "Membuat laporan manual", "Meningkatkan biaya kertas"], a: 1, explanation: "Komputerisasi mencegah error dan meningkatkan efisiensi." },
+            { q: "Dalam spreadsheet, fungsi penjumlahan adalah...", options: ["AVERAGE", "SUM", "MAX", "MIN"], a: 1, explanation: "Fungsi SUM di Excel untuk menjumlahkan." },
+            { q: "Pencipta game ini adalah...", options: ["Reski Ardiansyah", "Budi Santoso", "Siti Aminah", "Joko Anwar"], a: 0, explanation: "Dibuat oleh Reski Ardiansyah." },
+            { q: "Profesi akuntan yang bertugas memeriksa laporan keuangan disebut...", options: ["Akuntan Pendidik", "Akuntan Perpajakan", "Akuntan Publik (Auditor)", "Akuntan Manajemen"], a: 2, explanation: "Akuntan Publik melakukan audit." },
+            { q: "Salah satu prinsip etika profesi akuntan adalah...", options: ["Integritas", "Kebohongan", "Manipulasi", "Keuntungan pribadi"], a: 0, explanation: "Integritas adalah kejujuran." },
+            { q: "K3 merupakan singkatan dari...", options: ["Keselamatan, Keamanan, dan Kebersihan", "Keselamatan, Kesehatan, dan Keamanan Kerja", "Kualitas, Kuantitas, dan Kualitas", "Kerja, Keras, dan Keuntungan"], a: 1, explanation: "K3 = Keselamatan dan Kesehatan Kerja." },
+            { q: "Aset = Kewajiban + ...", options: ["Pendapatan", "Beban", "Ekuitas (Modal)", "Prive"], a: 2, explanation: "Persamaan dasar akuntansi." },
+            { q: "Harta yang dimiliki perusahaan disebut...", options: ["Kewajiban", "Modal", "Aset", "Pendapatan"], a: 2, explanation: "Aset adalah harta perusahaan." },
+            { q: "Jurnal pertama kali untuk mencatat transaksi adalah...", options: ["Jurnal Umum", "Buku Besar", "Neraca", "Laporan Keuangan"], a: 0, explanation: "Jurnal umum adalah buku pertama pencatatan." },
+            { q: "Proses memindahkan dari jurnal ke buku besar disebut...", options: ["Posting", "Journalizing", "Closing", "Adjusting"], a: 0, explanation: "Posting adalah pemindahan ke buku besar." },
+            { q: "Harga pokok barang yang dijual disebut...", options: ["Harga Jual", "Harga Beli", "Harga Pokok Penjualan (HPP)", "Laba Kotor"], a: 2, explanation: "HPP = Harga Pokok Penjualan." },
+            { q: "Rumus HPP adalah...", options: ["Persediaan Awal + Pembelian - Persediaan Akhir", "Penjualan - HPP", "Aset - Kewajiban", "Modal - Prive"], a: 0, explanation: "Rumus HPP dasar." },
+            { q: "Bank yang kepemilikannya ada pada pemerintah adalah...", options: ["Bank Umum Swasta", "Bank Perkreditan Rakyat (BPR)", "Bank Pembangunan Daerah", "Bank Sentral"], a: 3, explanation: "Bank Indonesia adalah Bank Sentral milik pemerintah." },
+            { q: "Dalam bank syariah, sistem bunga diganti dengan...", options: ["Bagi Hasil", "Bunga Tetap", "Ribawi", "Diskonto"], a: 0, explanation: "Bank Syariah menggunakan bagi hasil, bukan bunga." },
+            { q: "Simbol limbah berbahaya (B3) biasanya berwarna...", options: ["Hijau", "Biru", "Kuning/Merah", "Putih"], a: 2, explanation: "B3 identik dengan warna peringatan kuning/merah." },
+            { q: "Titik kumpul saat keadaan darurat disebut...", options: ["Kantor", "Kantin", "Assembly Point", "Toilet"], a: 2, explanation: "Titik kumpul evakuasi." },
+            { q: "5R (5S) adalah budaya kerja Jepang untuk...", options: ["Kerja keras", "Kerja sama", "Kerapian dan Ketertiban", "Kenaikan Gaji"], a: 2, explanation: "5R = Ringkas, Rapi, Resik, Rawat, Rajin." },
+            { q: "Buku ini diterbitkan oleh Kementerian...", options: ["Keuangan", "Pendidikan, Kebudayaan, Riset, dan Teknologi", "Kesehatan", "Perdagangan"], a: 1, explanation: "Diterbitkan oleh Kemdikbudristek." },
+            { q: "Bab VI membahas tentang...", options: ["Siklus Akuntansi", "Aplikasi Spreadsheet", "Perbankan", "K3"], a: 1, explanation: "Bab VI tentang Spreadsheet/Excel." },
+            { q: "Neraca disebut juga...", options: ["Laporan Laba Rugi", "Laporan Posisi Keuangan", "Arus Kas", "Perubahan Modal"], a: 1, explanation: "Neraca = Laporan Posisi Keuangan." },
+            { q: "Aset lancar adalah aset yang dapat diubah menjadi kasir dalam waktu...", options: ["10 Tahun", "1 Tahun", "5 Tahun", "Seumur Hidup"], a: 1, explanation: "Aset lancar likuid (< 1 tahun)." },
+            { q: "Salah satu contoh Aset Tetap adalah...", options: ["Kas", "Piutang", "Tanah dan Bangunan", "Perlengkapan"], a: 2, explanation: "Aset tetap umur ekonomi > 1 tahun." },
+            { q: "Membayar utang dagang akan mempengaruhi akun...", options: ["Kas (Kurang) dan Utang (Kurang)", "Kas (Tambah) dan Utang (Kurang)", "Kas (Kurang) dan Utang (Tambah)", "Modal (Tambah)"], a: 0, explanation: "Pembayaran utang mengurangi kas dan utang." },
+            { q: "Laporan keuangan harus disajikan secara...", options: ["Berbohong", "Jujur dan Wajar", "Bagus saja", "Rahasia"], a: 1, explanation: "Prinsip penyajian wajar." },
+            { q: "Instagram Creator game ini adalah...", options: ["reski_aja", "ikky05__", "akuntansi_mania", "game_keren"], a: 1, explanation: "IG: ikky05__." },
+            { q: "Nomor WhatsApp pencipta game ini adalah...", options: ["08123456789", "085657398446", "08987654321", "08111222333"], a: 1, explanation: "WA: 085657398446." },
+            { q: "Jurnal Penutup berfungsi untuk...", options: ["Membuka akun", "Menutup akun nominal", "Merekam transaksi", "Menghitung pajak"], a: 1, explanation: "Menutup akun pendapatan dan beban." },
+            { q: "Salah satu produk bank syariah adalah...", options: ["Bunga Deposito", "Murabahah", "Kredit Bunga Flat", "Sertifikat Bunga"], a: 1, explanation: "Murabahah adalah produk pembiayaan syariah." },
+            { q: "Wadi'ah dalam bank syariah adalah akad...", options: ["Penitipan", "Bagi Hasil", "Sewa", "Jual Beli"], a: 0, explanation: "Wadi'ah adalah penitipan dana." },
+            { q: "Potongan harga yang diberikan kepada pembeli karena membeli dalam jumlah besar disebut...", options: ["Potongan Tunai", "Potongan Penjualan", "Potongan Komersial", "Potongan Retur"], a: 2, explanation: "Trade Discount / Potongan Komersial." },
+            { q: "Pengembalian barang yang rusak oleh pembeli disebut...", options: ["Penjualan Kredit", "Retur Penjualan", "Pembelian Kredit", "Retur Pembelian"], a: 1, explanation: "Retur Penjualan = Sales Return." },
+            { q: "Jurnal khusus untuk mencatat transaksi pembelian tunai adalah...", options: ["Jurnal Penjualan", "Jurnal Pembelian", "Jurnal Pengeluaran Kas", "Jurnal Penerimaan Kas"], a: 2, explanation: "Cash Payments Journal." },
+            { q: "Bank Indonesia berfungsi sebagai...", options: ["Bank Umum", "Bank Sentral", "Bank Syariah", "Bank Asing"], a: 1, explanation: "Bank Sentral RI." },
+            { q: "Uang yang disimpan di bank oleh nasabah disebut...", options: ["Kredit", "Simpanan (Deposito/Tabungan)", "Modal", "Cek"], a: 1, explanation: "Simpanan nasabah bank." },
+            { q: "Pinjaman yang diberikan bank kepada nasabah disebut...", options: ["Simpanan", "Kredit", "Setoran", "Cek"], a: 1, explanation: "Kredit Bank." },
+            { q: "Akun nominal yang harus ditutup antara lain...", options: ["Kas, Bank, Piutang", "Pendapatan, Beban, Prive", "Tanah, Modal", "Utang"], a: 1, explanation: "Akun nominal sementara." },
+            { q: "Email pencipta game ini adalah...", options: ["reski@gmail.com", "ar0236879@gmail.com", "ikky05@gmail.com", "admin@gmail.com"], a: 1, explanation: "Email: ar0236879@gmail.com." },
+            { q: "Penulis buku ini adalah Indrastuti Ristiyani, Solichatun, dan...", options: ["Reski Ardiansyah", "A. Rahmat Dimyati", "Joko Widodo", "Sri Mulyani"], a: 1, explanation: "Penulis Buku." }
+        ];
+
+        // ==========================================
+        // 4. GAME LOGIC WITH CLOUD SYNC
+        // ==========================================
+        const game = {
+            currentQuestions: [],
+            currentQuestionIndex: 0,
+            score: 0,
+            selectedOptionIndex: null,
+            
+            // Inisialisasi Game (Start Screen)
+            start: function() {
+                // Jika sudah ada progress tersimpan, lanjutkan. Jika tidak, reset.
+                if (this.currentQuestionIndex >= 100) {
+                    this.resetGameData();
+                }
+                
+                // Jika soal belum dimuat (first time), load
+                if (this.currentQuestions.length === 0) {
+                    this.setupQuestions();
+                }
+
+                this.showScreen('game-screen');
+                this.loadQuestion();
+            },
+
+            setupQuestions: function() {
+                // Logic duplikasi soal jika kurang dari 100 (untuk demo)
+                let pool = [...questionBank];
+                // Acak soal agar setiap user tidak selalu urutan sama (random seed bisa ditambahkan jika mau lebih kompleks)
+                // Disini kita acak sekali saat inisialisasi awal
+                this.shuffleArray(pool);
+                this.currentQuestions = pool; 
+                // Note: Idealnya soal harus tetap 100 atau lebih. 
+                // Disini kita gunakan pool yang ada.
+            },
+
+            resetGameData: function() {
+                this.currentQuestionIndex = 0;
+                this.score = 0;
+                this.currentQuestions = [];
+                this.setupQuestions();
+                this.saveProgressToCloud();
+            },
+
+            shuffleArray: function(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            },
+
+            loadQuestion: function() {
+                // Cek apakah soal habis
+                if (this.currentQuestionIndex >= this.currentQuestions.length) {
+                    this.endGame();
+                    return;
+                }
+
+                this.selectedOptionIndex = null;
+                const qData = this.currentQuestions[this.currentQuestionIndex];
+                
+                document.getElementById('question-counter').innerText = `Soal: ${this.currentQuestionIndex + 1}/${this.currentQuestions.length}`;
+                document.getElementById('score-display').innerText = `Skor: ${this.score}`;
+                const progressPercent = ((this.currentQuestionIndex) / this.currentQuestions.length) * 100;
+                document.getElementById('progress-bar').style.width = `${progressPercent}%`;
+
+                document.getElementById('btn-check').classList.remove('hidden');
+                document.getElementById('btn-check').disabled = true;
+                document.getElementById('btn-next').classList.add('hidden');
+                document.getElementById('explanation-box').classList.remove('show');
+
+                document.getElementById('question-text').innerText = qData.q;
+
+                const optionsContainer = document.getElementById('options-container');
+                optionsContainer.innerHTML = '';
+
+                let options = [];
+                qData.options.forEach((opt, index) => {
+                    options.push({ text: opt, originalIndex: index });
+                });
+
+                options = this.shuffleArray(options);
+
+                options.forEach((opt, i) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn';
+                    btn.innerText = opt.text;
+                    btn.dataset.originalIndex = opt.originalIndex;
+                    btn.onclick = () => this.selectOption(i, opt.originalIndex);
+                    optionsContainer.appendChild(btn);
+                });
+            },
+
+            selectOption: function(btnIndex, originalIndex) {
+                const buttons = document.querySelectorAll('.option-btn');
+                buttons.forEach(b => b.classList.remove('selected'));
+                buttons[btnIndex].classList.add('selected');
+
+                this.selectedOptionIndex = originalIndex;
+                this.selectedBtnIndexUI = btnIndex;
+                document.getElementById('btn-check').disabled = false;
+            },
+
+            checkAnswer: function() {
+                if (this.selectedOptionIndex === null) return;
+
+                const qData = this.currentQuestions[this.currentQuestionIndex];
+                const isCorrect = (this.selectedOptionIndex === qData.a);
+                const buttons = document.querySelectorAll('.option-btn');
+
+                buttons.forEach(b => b.disabled = true);
+
+                if (isCorrect) {
+                    buttons[this.selectedBtnIndexUI].classList.add('correct');
+                    buttons[this.selectedBtnIndexUI].classList.remove('selected');
+                    this.score += 10;
+                    document.getElementById('score-display').innerText = `Skor: ${this.score}`;
+                    document.getElementById('explanation-title').innerHTML = '<span class="icon-correct" style="color:#10b981">✅</span> Jawaban Benar!';
+                } else {
+                    buttons[this.selectedBtnIndexUI].classList.add('wrong');
+                    buttons[this.selectedBtnIndexUI].classList.remove('selected');
+
+                    buttons.forEach(btn => {
+                        if (parseInt(btn.dataset.originalIndex) === qData.a) {
+                            btn.classList.add('correct');
+                        }
+                    });
+                    document.getElementById('explanation-title').innerHTML = '<span class="icon-wrong" style="color:#ef4444">❌</span> Jawaban Salah!';
+                }
+
+                document.getElementById('explanation-text').innerText = qData.explanation;
+                document.getElementById('explanation-box').classList.add('show');
+
+                document.getElementById('btn-check').classList.add('hidden');
+                document.getElementById('btn-next').classList.remove('hidden');
+            },
+
+            nextQuestion: function() {
+                this.currentQuestionIndex++;
+                // Simpan progress ke Cloud setiap kali pindah soal
+                this.saveProgressToCloud();
+                
+                this.loadQuestion();
+            },
+
+            endGame: function() {
+                this.showScreen('result-screen');
+                document.getElementById('final-score').innerText = this.score;
+
+                document.getElementById('cloud-result-badge').style.display = isFirebaseActive ? 'inline-block' : 'none';
+
+                const percentage = (this.score / (this.currentQuestions.length * 10)) * 100;
+                let msg = "";
+                if (percentage >= 90) msg = "Luar Biasa! Calon Akuntan Profesional!";
+                else if (percentage >= 70) msg = "Bagus Sekali! Pemahaman Mantap.";
+                else if (percentage >= 50) msg = "Cukup Bagus, Tingkatkan Lagi!";
+                else msg = "Jangan Menyerah, Belajar Lagi Ya!";
+
+                document.getElementById('feedback-message').innerText = msg;
+                document.getElementById('result-detail').innerText = `Kamu menjawab benar ${this.score/10} dari ${this.currentQuestions.length} soal.`;
+                document.getElementById('progress-bar').style.width = `100%`;
+                
+                // Hapus save saat game selesai agar bisa main ulang
+                this.clearProgressFromCloud();
+            },
+
+            restart: function() {
+                this.resetGameData();
+                this.start();
+            },
+
+            // --- CLOUD SYNC FUNCTIONS ---
+            saveProgressToCloud: function() {
+                if (!isFirebaseActive || !auth.user) return;
+
+                const gameData = {
+                    score: this.score,
+                    questionIndex: this.currentQuestionIndex,
+                    timestamp: Date.now()
+                };
+
+                db.ref('users/' + auth.user.uid + '/gameProgress').set(gameData)
+                    .then(() => {
+                        console.log("Progress saved to cloud");
+                        // Optional: Show small icon saving...
+                    })
+                    .catch((error) => {
+                        console.error("Save failed:", error);
+                    });
+            },
+
+            loadProgressFromCloud: function() {
+                if (!isFirebaseActive || !auth.user) return;
+
+                db.ref('users/' + auth.user.uid + '/gameProgress').once('value')
+                    .then((snapshot) => {
+                        const data = snapshot.val();
+                        if (data) {
+                            this.score = data.score || 0;
+                            this.currentQuestionIndex = data.questionIndex || 0;
+                            this.setupQuestions(); // Setup questions based on loaded index
+                            console.log("Progress loaded:", data);
+                        } else {
+                            this.resetGameData();
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Load failed:", error);
+                        this.resetGameData();
+                    });
+            },
+
+            clearProgressFromCloud: function() {
+                if (!isFirebaseActive || !auth.user) return;
+                db.ref('users/' + auth.user.uid + '/gameProgress').remove();
+            },
+
+            showScreen: function(screenId) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+        };
+
+        // --- BACKGROUND ANIMATION ---
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height - height;
+                this.speed = 1 + Math.random() * 3;
+                this.text = ['Rp', '$', '%', '📊', '📈'][Math.floor(Math.random() * 5)];
+                this.size = 10 + Math.random() * 20;
+                this.opacity = 0.1 + Math.random() * 0.3;
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > height) { this.y = -50; this.x = Math.random() * width; }
+            }
+            draw() {
+                ctx.fillStyle = `rgba(251, 191, 36, ${this.opacity})`;
+                ctx.font = `${this.size}px Arial`;
+                ctx.fillText(this.text, this.x, this.y);
+            }
+        }
+
+        function initParticles() {
+            for (let i = 0; i < 50; i++) particles.push(new Particle());
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animate);
+        }
+
+        initParticles();
+        animate();
+
+        // Initialize App
+        window.onload = function() {
+            auth.init();
+        };
+
+    </script>
+</body>
+</html>
